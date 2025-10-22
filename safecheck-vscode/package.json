@@ -1,84 +1,174 @@
 {
   "name": "safecheck-vscode",
   "displayName": "SafeCheck",
-  "description": "Local-first security scanning companion for VS Code that aggregates Semgrep, Bandit, OSV-Scanner, Gitleaks, and Trivy.",
+  "description": "Local-first security scanning extension orchestrating Semgrep, Bandit, OSV-Scanner, Gitleaks, and Trivy with optional AI-powered fixes via OpenRouter.",
   "version": "0.1.0",
   "publisher": "safecheck",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/safecheck/safecheck-vscode"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Linters", "Other"],
+  "categories": [
+    "Linters",
+    "Other"
+  ],
   "activationEvents": [
     "onCommand:safecheck.scanWorkspace",
-    "workspaceContains:**/*"
+    "onCommand:safecheck.openPanel",
+    "onCommand:safecheck.openSettings"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "safecheck.scanWorkspace", "title": "SafeCheck: Scan Workspace" },
-      { "command": "safecheck.exportSarif", "title": "SafeCheck: Export SARIF Report" },
-      { "command": "safecheck.toggleBaseline", "title": "SafeCheck: Toggle Baseline" },
-      { "command": "safecheck.openPanel", "title": "SafeCheck: Show Findings" }
+      {
+        "command": "safecheck.scanWorkspace",
+        "title": "SafeCheck: Scan Workspace"
+      },
+      {
+        "command": "safecheck.openPanel",
+        "title": "SafeCheck: Open Findings Panel"
+      },
+      {
+        "command": "safecheck.exportSarif",
+        "title": "SafeCheck: Export Reports"
+      },
+      {
+        "command": "safecheck.openSettings",
+        "title": "SafeCheck: Open Settings"
+      },
+      {
+        "command": "safecheck.toggleBaseline",
+        "title": "SafeCheck: Snapshot Baseline"
+      }
     ],
     "configuration": {
       "title": "SafeCheck",
       "properties": {
-        "safecheck.enableSemgrep": { "type": "boolean", "default": true, "description": "Run Semgrep scans when available." },
-        "safecheck.enableBandit": { "type": "boolean", "default": true, "description": "Run Bandit scans when available." },
-        "safecheck.enableOsv": { "type": "boolean", "default": true, "description": "Run OSV-Scanner scans when available." },
-        "safecheck.enableGitleaks": { "type": "boolean", "default": true, "description": "Run Gitleaks scans when available." },
-        "safecheck.enableTrivy": { "type": "boolean", "default": false, "description": "Run Trivy scans when available." },
-        "safecheck.paths.semgrep": { "type": "string", "default": "", "description": "Override path to the Semgrep executable." },
-        "safecheck.paths.bandit": { "type": "string", "default": "", "description": "Override path to the Bandit executable." },
-        "safecheck.paths.osv": { "type": "string", "default": "", "description": "Override path to the OSV-Scanner executable." },
-        "safecheck.paths.gitleaks": { "type": "string", "default": "", "description": "Override path to the Gitleaks executable." },
-        "safecheck.paths.trivy": { "type": "string", "default": "", "description": "Override path to the Trivy executable." },
-        "safecheck.baseline.enabled": { "type": "boolean", "default": true, "description": "Filter out findings that exist in the baseline file." },
-        "safecheck.baseline.path": { "type": "string", "default": ".safecheck/baseline.json", "description": "Relative path to the baseline file." },
-        "safecheck.ignoreFile": { "type": "string", "default": ".safecheckignore", "description": "Relative path to the ignore file." },
-        "safecheck.severity.levels": {
-          "type": "object",
-          "default": {
-            "critical": "Error",
-            "high": "Error",
-            "medium": "Warning",
-            "low": "Information",
-            "info": "Information"
-          },
-          "description": "Mapping of SafeCheck severities to VS Code DiagnosticSeverity values."
+        "safecheck.tools.semgrep.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run Semgrep if the binary is available in PATH or configured explicitly."
         },
-        "safecheck.llm.enabled": { "type": "boolean", "default": false, "description": "Enable the optional AI-powered fix suggestions." },
-        "safecheck.llm.provider": { "type": "string", "default": "openrouter", "enum": ["openrouter"], "description": "LLM provider identifier." },
-        "safecheck.llm.model": { "type": "string", "default": "openrouter/auto", "description": "Model identifier for the LLM provider." },
-        "safecheck.llm.baseUrl": { "type": "string", "default": "https://openrouter.ai/api/v1", "description": "Base URL for the OpenRouter API." },
-        "safecheck.timeout": { "type": "number", "default": 180000, "description": "Maximum time in milliseconds for each scanner." },
-        "safecheck.report.output": { "type": "string", "default": ".safecheck/reports", "description": "Directory for generated reports." }
+        "safecheck.tools.bandit.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run Bandit if the binary is available in PATH or configured explicitly."
+        },
+        "safecheck.tools.osv.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run OSV-Scanner if the binary is available in PATH or configured explicitly."
+        },
+        "safecheck.tools.gitleaks.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run Gitleaks if the binary is available in PATH or configured explicitly."
+        },
+        "safecheck.tools.trivy.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run Trivy filesystem scans if the binary is available in PATH or configured explicitly."
+        },
+        "safecheck.paths.semgrep": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional absolute path to the Semgrep binary."
+        },
+        "safecheck.paths.bandit": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional absolute path to the Bandit binary."
+        },
+        "safecheck.paths.osv": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional absolute path to the OSV-Scanner binary."
+        },
+        "safecheck.paths.gitleaks": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional absolute path to the Gitleaks binary."
+        },
+        "safecheck.paths.trivy": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional absolute path to the Trivy binary."
+        },
+        "safecheck.reports.outputDir": {
+          "type": "string",
+          "default": ".safecheck/reports",
+          "description": "Directory (relative to workspace) for generated SARIF and HTML reports."
+        },
+        "safecheck.scan.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional glob patterns to exclude from scanner inputs."
+        },
+        "safecheck.baseline.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide findings that match the stored baseline."
+        },
+        "safecheck.baseline.path": {
+          "type": "string",
+          "default": ".safecheck/baseline.json",
+          "description": "Relative path to the baseline snapshot file."
+        },
+        "safecheck.llm.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable AI suggestions that send snippets to OpenRouter."
+        },
+        "safecheck.llm.baseUrl": {
+          "type": "string",
+          "default": "https://openrouter.ai/api/v1",
+          "description": "Base URL for the OpenRouter-compatible API."
+        },
+        "safecheck.llm.model": {
+          "type": "string",
+          "default": "deepseek/deepseek-chat-v3.1:free",
+          "description": "Model identifier sent to OpenRouter."
+        },
+        "safecheck.timeout": {
+          "type": "number",
+          "default": 180000,
+          "description": "Timeout in milliseconds for each scanner command."
+        }
       }
     }
   },
   "scripts": {
+    "clean": "rimraf out",
     "compile": "tsc -p .",
-    "build": "npm run compile",
+    "build": "npm run clean && npm run compile",
     "watch": "tsc -w -p .",
     "lint": "tsc --noEmit",
-    "test": "mocha -r ts-node/register test/**/*.test.ts",
+    "test": "mocha",
     "package": "vsce package"
   },
   "devDependencies": {
     "@types/chai": "^4.3.11",
-    "@types/minimatch": "^5.1.2",
+    "@types/diff": "^7.0.2",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.30",
     "@types/vscode": "^1.85.0",
     "@types/which": "^3.0.3",
     "chai": "^4.3.10",
     "mocha": "^10.3.0",
+    "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
     "vsce": "^2.15.0"
   },
   "dependencies": {
+    "diff": "^5.2.0",
     "minimatch": "^9.0.3",
     "which": "^4.0.0"
   }

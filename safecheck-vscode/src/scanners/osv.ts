@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { runCmd } from '../utils/exec';
 import type { Finding, ScannerContext } from './index';
-import { parseOsvJson } from './parsers/osvParser';
+import { parseOsv } from './parsers/osvParser';
 
 const LOCKFILES = [
   'package-lock.json',
@@ -16,11 +16,10 @@ const LOCKFILES = [
   'go.mod'
 ];
 
-export async function runOsvScan(context: ScannerContext): Promise<{ findings: Finding[]; warning?: string }> {
+export async function runOsvScanner(context: ScannerContext): Promise<{ findings: Finding[]; warning?: string }> {
   const lockfiles = LOCKFILES.filter((file) => fs.existsSync(path.join(context.workspaceFolder, file)));
-
   if (lockfiles.length === 0) {
-    return { findings: [], warning: 'OSV-Scanner: no supported lockfiles found' };
+    return { findings: [], warning: 'OSV-Scanner: no supported lockfiles found.' };
   }
 
   const findings: Finding[] = [];
@@ -30,17 +29,13 @@ export async function runOsvScan(context: ScannerContext): Promise<{ findings: F
       cwd: context.workspaceFolder,
       timeout: context.config.timeout
     });
-
     if (result.timedOut) {
-      return { findings, warning: 'OSV-Scanner timed out' };
+      return { findings, warning: 'OSV-Scanner timed out.' };
     }
-
     if (result.code !== 0 && !result.stdout) {
-      throw new Error(`OSV-Scanner exited with code ${result.code}: ${result.stderr}`);
+      return { findings, warning: result.stderr || 'OSV-Scanner exited with an error.' };
     }
-
-    findings.push(...parseOsvJson(result.stdout, context.workspaceFolder, lockfile));
+    findings.push(...parseOsv(result.stdout, context.workspaceFolder, lockfile));
   }
-
   return { findings };
 }

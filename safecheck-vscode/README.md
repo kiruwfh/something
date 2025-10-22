@@ -1,113 +1,133 @@
 # SafeCheck VS Code Extension
 
-SafeCheck is a privacy-first security scanning companion for Visual Studio Code. It runs popular open source security tools locally, aggregates their results, and surfaces actionable findings directly inside the editor. The extension normalises findings into a consistent format, highlights issues inline via Diagnostics, and provides quick fixes for frequent security mistakes. No source code ever leaves your machine unless you explicitly enable the optional AI assistant.
+SafeCheck is a local-first security companion for Visual Studio Code, Cursor, and Windsurf. The extension orchestrates your on-disk security scanners, aggregates their results, and helps you review and remediate vulnerabilities without sending full files to the cloud. Optional AI suggestions use OpenRouter only when you explicitly request them.
 
-## Why SafeCheck?
+## Features
 
-- **Local-first:** SafeCheck shells out to tools you install on your machine. There is no telemetry and no project data leaves your device.
-- **Unified results:** Findings from Semgrep, Bandit, OSV-Scanner, Gitleaks, and Trivy are normalised into SARIF 2.1.0 and surfaced as VS Code diagnostics.
-- **Actionable:** Inspect findings in a dedicated panel, jump to affected lines, ignore noisy rules, record baselines, and export reports.
-- **Optional AI:** When enabled, SafeCheck can request patch suggestions from an OpenRouter-compatible LLM using minimal snippets. The feature is disabled by default.
+- **Scan Workspace:** Run Semgrep, Bandit, OSV-Scanner, Gitleaks, and (optionally) Trivy against the current project.
+- **Unified Findings:** Diagnostics appear inline in the editor and inside the SafeCheck findings panel with filters, search, and jump-to-location.
+- **Noise Reduction:** Maintain a baseline snapshot to hide known issues and use `.safecheckignore` for file or rule suppressions.
+- **Reports:** Export SARIF 2.1.0 and HTML summaries into `.safecheck/reports/`.
+- **AI-on-demand:** Request a unified diff fix for any finding. Only a minimal, redacted snippet (±30 lines) leaves your machine.
 
-## Getting Started
+## Requirements
 
-### Prerequisites
+- [Node.js](https://nodejs.org/) 18 or later
+- VS Code 1.85.0+, Cursor, or Windsurf
+- External scanners installed locally (see below)
 
-- [Node.js](https://nodejs.org/) 18+
-- npm
-- VS Code 1.85.0 or newer
+## Installation
 
-### Install Dependencies
+1. Clone the repository and install dependencies:
+   ```bash
+   npm install
+   npm run build
+   ```
+2. Launch VS Code, run **Run and Debug → Start Debugging** (F5) to open an Extension Development Host with SafeCheck.
+3. To produce an installable package, run `npm run package` and install the generated `.vsix` in VS Code, Cursor, or Windsurf (Extensions view → `…` menu → **Install from VSIX…**).
 
+## External scanners
+
+SafeCheck shells out to the scanners on your PATH. Install the tools you need and make sure they are discoverable.
+
+### Arch Linux (paru examples)
 ```bash
-npm install
-npm run build
+# Semgrep
+paru -S semgrep  # или pipx install semgrep
+# Bandit
+pipx install bandit
+# OSV-Scanner
+paru -S osv-scanner
+# gitleaks
+paru -S gitleaks
+# Trivy (опционально)
+paru -S trivy
 ```
 
-Open the project in VS Code and press `F5` (Run → Start Debugging) to launch an Extension Development Host with SafeCheck loaded.
+### Other platforms
 
-### External Scanners
+- **Semgrep:** `pipx install semgrep` or follow the [official quick start](https://semgrep.dev/docs/getting-started/).
+- **Bandit:** `pipx install bandit` or `pip install bandit` inside a virtual environment.
+- **OSV-Scanner:** Download binaries from the [GitHub releases page](https://github.com/google/osv-scanner#installation) or use your package manager.
+- **Gitleaks:** `brew install gitleaks` on macOS, or grab binaries from [GitHub releases](https://github.com/gitleaks/gitleaks#installation).
+- **Trivy (optional):** Follow the [official installation guide](https://aquasecurity.github.io/trivy/latest/getting-started/installation/) for your platform.
 
-Install the tools you want SafeCheck to orchestrate and ensure they are available on your PATH.
+If a tool is missing, SafeCheck shows a gentle reminder and continues with the remaining scanners.
 
-| Tool | Purpose | Install |
-| --- | --- | --- |
-| Semgrep | Static analysis with OWASP Top Ten rules | [Docs](https://semgrep.dev/docs/getting-started/) |
-| Bandit | Python AST security checks | `pip install bandit` |
-| OSV-Scanner | Dependency vulnerability scanning | [GitHub releases](https://github.com/google/osv-scanner#installation) |
-| Gitleaks | Secret detection | `brew install gitleaks` or [releases](https://github.com/gitleaks/gitleaks#installation) |
-| Trivy | FS / IaC scanning | `brew install trivy` or [docs](https://aquasecurity.github.io/trivy/latest/getting-started/installation/) |
+## Usage
 
-If a binary is missing, SafeCheck shows a friendly notification and continues with the remaining tools.
+### Run a scan
 
-### Configuration
+1. Open a workspace folder containing your project.
+2. Run **SafeCheck: Scan Workspace** from the Command Palette.
+3. Findings appear as diagnostics and inside **SafeCheck: Open Findings Panel**.
+4. Use the panel filters (tool, severity, search) and click a finding to jump to the affected location.
 
-SafeCheck reads settings from VS Code (`safecheck.*`) and an optional `safecheck.config.json` file in your workspace root. Key settings include:
+### Baseline and ignore
 
-- `safecheck.enableSemgrep`, `safecheck.enableBandit`, `safecheck.enableOsv`, `safecheck.enableGitleaks`, `safecheck.enableTrivy`
-- `safecheck.paths.<tool>` to override binary locations
-- `safecheck.baseline.enabled` / `safecheck.baseline.path`
-- `safecheck.ignoreFile`
-- `safecheck.severity.levels`
-- `safecheck.llm.enabled`, `safecheck.llm.model`, `safecheck.llm.baseUrl`
+- **Baseline:** Run **SafeCheck: Snapshot Baseline** to capture current findings into `.safecheck/baseline.json`. When `safecheck.baseline.enabled` (default), only new findings are shown.
+- **Ignore rules/files:** Create `.safecheckignore` in the workspace root. List glob patterns per line or use `rule:<ruleId>` to suppress specific rules.
 
-Run **SafeCheck: Scan Workspace** from the Command Palette to trigger a scan.
-
-### Baseline & Ignore
-
-- **Baseline:** Execute **SafeCheck: Toggle Baseline** to snapshot the current findings into `.safecheck/baseline.json`. Future scans will suppress entries found in the baseline when baseline filtering is enabled.
-- **Ignore:** Add glob patterns or `rule:<ruleId>` directives to `.safecheckignore` to silence files or rules permanently.
-
-### Quick Fixes
-
-SafeCheck ships with four quick fixes that do not rely on AI:
-
-1. Replace insecure `yaml.load` with `yaml.safe_load`.
-2. Convert `subprocess.run(..., shell=True)` into a safer invocation with `shell=False` and `check=True`.
-3. Insert Express `helmet()` middleware if missing.
-4. Switch insecure crypto hashes such as `md5` to `sha256` in JS/TS files.
+Example `.safecheckignore`:
+```
+# Ignore generated code
+build/**
+rule:SEMGRP001
+```
 
 ### Reports
 
-- **SARIF:** Run **SafeCheck: Export SARIF Report** to write `.safecheck/reports/latest.sarif`.
-- **HTML:** The same command also produces `.safecheck/reports/latest.html` summarising findings.
+Run **SafeCheck: Export Reports** to generate:
 
-### Optional AI Assistance
+- `.safecheck/reports/latest.sarif` (SARIF 2.1.0)
+- `.safecheck/reports/latest.html`
 
-1. Enable via `"safecheck.llm.enabled": true`.
-2. Provide credentials via environment variables or settings:
-   - `SAFE_LLM_PROVIDER=openrouter`
-   - `OPENROUTER_API_KEY=<key>`
-   - `OPENROUTER_BASE_URL` (defaults to `https://openrouter.ai/api/v1`)
-   - `OPENROUTER_MODEL` (defaults to `openrouter/auto`)
-3. The results panel shows a **Suggest AI Fix** button. SafeCheck sends only a small snippet (±30 lines), the rule ID, and message. Returned unified diffs are shown for manual review before applying.
+These files are overwritten on each export.
 
-### Testing
+## Optional AI suggestions
 
-Run automated tests with:
+AI suggestions are disabled by default. SafeCheck only calls OpenRouter when you press **Suggest AI Fix** on a finding.
 
-```bash
-npm test
-```
+1. Run **SafeCheck: Open Settings**.
+2. Enable **AI suggestions**, choose the model (`deepseek/deepseek-chat-v3.1:free` by default), and set the base URL (defaults to `https://openrouter.ai/api/v1`).
+3. Enter your OpenRouter API key. The key is stored securely via VS Code `SecretStorage`. You can also set `OPENROUTER_API_KEY` in the environment.
+4. Click **Test Connection** to confirm access.
+5. In the findings panel, click **Suggest AI Fix** to request a patch. A diff preview opens; you can copy or apply it after manual review.
 
-Fixtures under `test/fixtures` contain intentionally vulnerable code to exercise the parsers and baseline/ignore logic.
+### Privacy and context control
 
-### Packaging
+- Only a snippet of ±30 lines around the finding, the `ruleId`, message, language, and file path are sent.
+- Obvious secrets (e.g., `API_KEY=...`) are redacted before transmission.
+- SafeCheck warns before the first snippet leaves your machine.
 
-Create a VSIX by running:
+## Configuration reference
 
-```bash
-npm run package
-```
+All settings live under the `safecheck` namespace (Settings UI or `settings.json`). Key options:
 
-This uses `vsce` to produce `safecheck-vscode.vsix`.
+- `safecheck.tools.semgrep.enabled` (default `true`)
+- `safecheck.tools.bandit.enabled` (default `true`)
+- `safecheck.tools.osv.enabled` (default `true`)
+- `safecheck.tools.gitleaks.enabled` (default `true`)
+- `safecheck.tools.trivy.enabled` (default `false`)
+- `safecheck.scan.exclude`: additional glob exclusions passed to Semgrep.
+- `safecheck.baseline.enabled`: hide findings present in the baseline snapshot.
+- `safecheck.baseline.path`: relative path to the baseline file (default `.safecheck/baseline.json`).
+- `safecheck.reports.outputDir`: reports folder (default `.safecheck/reports`).
+- `safecheck.llm.enabled`, `safecheck.llm.baseUrl`, `safecheck.llm.model` for AI control.
 
-## Manual Verification
+## Development
 
-1. Install at least one supported scanner.
-2. Open a fixture workspace (for example `test/fixtures/js-demo`).
-3. Run **SafeCheck: Scan Workspace**.
-4. Review diagnostics, panel entries, and try quick fixes.
+- Build: `npm run build`
+- Watch: `npm run watch`
+- Lint/type-check: `npm run lint`
+- Tests: `npm test`
+- Package: `npm run package`
+
+End-to-end tests mock scanner JSON outputs to verify parsing, baseline filtering, SARIF generation, and ignore rules.
+
+## Privacy statement
+
+SafeCheck is local-first. No source code leaves your machine unless you enable AI suggestions, in which case only the minimal snippet described above is sent to the configured OpenRouter endpoint. API keys are stored via VS Code SecretStorage.
 
 ## License
 

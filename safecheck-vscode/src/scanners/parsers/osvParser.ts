@@ -1,32 +1,35 @@
 import * as path from 'path';
-import type { Finding, SafeSeverity } from '../index';
+import type { Finding } from '../index';
 
-interface OsvFinding {
+interface OsvVulnerability {
   summary?: string;
-  database_specific?: { severity?: string; url?: string };
+  database_specific?: {
+    severity?: string;
+    cwe_ids?: string[];
+    url?: string;
+  };
 }
 
 interface OsvPackage {
   package?: { name?: string };
-  vulnerabilities?: OsvFinding[];
+  vulnerabilities?: OsvVulnerability[];
 }
 
-interface OsvReport {
+interface OsvResult {
   results?: Array<{
     packages?: OsvPackage[];
   }>;
 }
 
-export function parseOsvJson(stdout: string, workspaceFolder: string, lockfile: string): Finding[] {
+export function parseOsv(stdout: string, workspaceFolder: string, lockfile: string): Finding[] {
   if (!stdout.trim()) {
     return [];
   }
-
-  let parsed: OsvReport;
+  let parsed: OsvResult;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(stdout) as OsvResult;
   } catch (error) {
-    console.error('[SafeCheck] Failed to parse OSV output', error);
+    console.error('[SafeCheck] Failed to parse OSV output:', error);
     return [];
   }
 
@@ -34,20 +37,18 @@ export function parseOsvJson(stdout: string, workspaceFolder: string, lockfile: 
   for (const result of parsed.results ?? []) {
     for (const pkg of result.packages ?? []) {
       for (const vuln of pkg.vulnerabilities ?? []) {
-        const packageName = pkg.package?.name ?? 'dependency';
-        const ruleId = `osv-${packageName}`;
-        const message = vuln.summary ?? `Vulnerability found in ${packageName}`;
+        const name = pkg.package?.name ?? 'dependency';
+        const message = vuln.summary ?? `Vulnerability found in ${name}`;
         const severity = normalizeSeverity(vuln.database_specific?.severity);
-        const filePath = path.relative(workspaceFolder, path.resolve(workspaceFolder, lockfile));
         findings.push({
-          id: `${ruleId}-${filePath}`,
-          ruleId,
+          tool: 'osv',
+          ruleId: `OSV-${name}`,
           message,
           severity,
-          filePath,
-          startLine: 1,
-          tool: 'OSV-Scanner',
-          url: vuln.database_specific?.url
+          file: path.relative(workspaceFolder, path.resolve(workspaceFolder, lockfile)),
+          line: 1,
+          endLine: 1,
+          cwe: vuln.database_specific?.cwe_ids?.[0]
         });
       }
     }
@@ -55,17 +56,17 @@ export function parseOsvJson(stdout: string, workspaceFolder: string, lockfile: 
   return findings;
 }
 
-function normalizeSeverity(value?: string): SafeSeverity {
-  switch ((value ?? '').toLowerCase()) {
-    case 'critical':
-      return 'critical';
-    case 'high':
-      return 'high';
-    case 'medium':
-      return 'medium';
-    case 'low':
-      return 'low';
+function normalizeSeverity(value?: string): Finding['severity'] {
+  switch ((value ?? '').toUpperCase()) {
+    case 'CRITICAL':
+      return 'CRITICAL';
+    case 'HIGH':
+      return 'HIGH';
+    case 'MEDIUM':
+      return 'MEDIUM';
+    case 'LOW':
+      return 'LOW';
     default:
-      return 'info';
+      return 'MEDIUM';
   }
 }

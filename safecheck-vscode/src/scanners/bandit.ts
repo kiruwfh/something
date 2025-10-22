@@ -1,9 +1,9 @@
 import { runCmd } from '../utils/exec';
 import type { Finding, ScannerContext } from './index';
-import { parseBanditJson } from './parsers/banditParser';
+import { parseBandit } from './parsers/banditParser';
 
-export async function runBanditScan(context: ScannerContext): Promise<{ findings: Finding[]; warning?: string }> {
-  const args = ['-q', '-r', '.', '-f', 'json'];
+export async function runBandit(context: ScannerContext): Promise<{ findings: Finding[]; warning?: string }> {
+  const args = ['-f', 'json', '-q', '.'];
   const result = await runCmd(context.executable, args, {
     cwd: context.workspaceFolder,
     timeout: context.config.timeout
@@ -12,11 +12,10 @@ export async function runBanditScan(context: ScannerContext): Promise<{ findings
   if (result.timedOut) {
     return { findings: [], warning: 'Bandit timed out' };
   }
-
   if (result.code !== 0 && !result.stdout) {
-    throw new Error(`Bandit exited with code ${result.code}: ${result.stderr}`);
+    return { findings: [], warning: result.stderr || 'Bandit exited with an error.' };
   }
 
-  const findings = parseBanditJson(result.stdout, context.workspaceFolder);
+  const findings = parseBandit(result.stdout, context.workspaceFolder);
   return { findings };
 }

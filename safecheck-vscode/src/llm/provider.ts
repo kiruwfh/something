@@ -1,16 +1,17 @@
-export interface LlmContext {
-  snippet: string;
+export interface SuggestFixInput {
+  language: string;
   ruleId: string;
   message: string;
-  languageId: string;
+  snippet: string;
+  filePath: string;
+  fileVersion?: string;
 }
 
-export interface LlmProvider {
-  generateFix(context: LlmContext): Promise<string | undefined>;
+export interface SuggestFixResult {
+  diff: string;
+  usage?: Record<string, unknown>;
 }
 
-export class NoopLlmProvider implements LlmProvider {
-  async generateFix(): Promise<string | undefined> {
-    return undefined;
-  }
+export interface LLMProvider {
+  suggestFix(input: SuggestFixInput): Promise<SuggestFixResult>;
 }

@@ -3,16 +3,17 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { parseSemgrepJson } from '../../src/scanners/parsers/semgrepParser';
-import { parseBanditJson } from '../../src/scanners/parsers/banditParser';
-import { parseGitleaksJson } from '../../src/scanners/parsers/gitleaksParser';
-import { parseTrivyJson } from '../../src/scanners/parsers/trivyParser';
-import { parseOsvJson } from '../../src/scanners/parsers/osvParser';
+import { parseSemgrep } from '../../src/scanners/parsers/semgrepParser';
+import { parseBandit } from '../../src/scanners/parsers/banditParser';
+import { parseGitleaks } from '../../src/scanners/parsers/gitleaksParser';
+import { parseTrivy } from '../../src/scanners/parsers/trivyParser';
+import { parseOsv } from '../../src/scanners/parsers/osvParser';
 import { filterBaseline } from '../../src/utils/baseline';
-import { loadIgnoreFile, isIgnored } from '../../src/utils/ignore';
-import { buildSarifReport } from '../../src/scanners/parsers/sarif';
+import { loadIgnoreConfig, isIgnored } from '../../src/utils/ignore';
+import { buildSarif } from '../../src/scanners/parsers/sarif';
 
 const fixturesRoot = path.resolve(__dirname, '..', 'fixtures');
+process.env.SAFECHECK_TEST_WORKSPACE = fixturesRoot;
 
 describe('SafeCheck parsing pipeline', () => {
   it('normalises findings and filters baseline', () => {
@@ -23,11 +24,11 @@ describe('SafeCheck parsing pipeline', () => {
     const osvOut = fs.readFileSync(path.join(fixturesRoot, 'osv-sample.json'), 'utf8');
 
     const findings = [
-      ...parseSemgrepJson(semgrepOut, fixturesRoot),
-      ...parseBanditJson(banditOut, fixturesRoot),
-      ...parseGitleaksJson(gitleaksOut, fixturesRoot),
-      ...parseTrivyJson(trivyOut, fixturesRoot),
-      ...parseOsvJson(osvOut, fixturesRoot, 'package-lock.json')
+      ...parseSemgrep(semgrepOut, fixturesRoot),
+      ...parseBandit(banditOut, fixturesRoot),
+      ...parseGitleaks(gitleaksOut, fixturesRoot),
+      ...parseTrivy(trivyOut, fixturesRoot),
+      ...parseOsv(osvOut, fixturesRoot, 'package-lock.json')
     ];
 
     expect(findings).to.have.length(5);
@@ -36,8 +37,8 @@ describe('SafeCheck parsing pipeline', () => {
       findings: [
         {
           ruleId: findings[0].ruleId,
-          filePath: findings[0].filePath,
-          startLine: findings[0].startLine
+          file: findings[0].file,
+          line: findings[0].line
         }
       ]
     };
@@ -45,7 +46,7 @@ describe('SafeCheck parsing pipeline', () => {
     const filtered = filterBaseline(findings, baseline);
     expect(filtered).to.have.length(4);
 
-    const sarif = buildSarifReport(filtered);
+    const sarif = buildSarif(filtered, fixturesRoot) as any;
     expect(sarif.runs[0].results).to.have.length(4);
   });
 
@@ -53,7 +54,7 @@ describe('SafeCheck parsing pipeline', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'safecheck-test-'));
     const ignorePath = path.join(tempDir, '.safecheckignore');
     fs.writeFileSync(ignorePath, 'py-demo/*\nrule:hardcoded-secret\n');
-    const ignoreConfig = loadIgnoreFile(tempDir, '.safecheckignore');
+    const ignoreConfig = loadIgnoreConfig(tempDir);
 
     const shouldIgnoreFile = isIgnored(ignoreConfig, tempDir, path.join(tempDir, 'py-demo/app.py'), 'any');
     const shouldIgnoreRule = isIgnored(ignoreConfig, tempDir, path.join(tempDir, 'js-demo/server.js'), 'hardcoded-secret');

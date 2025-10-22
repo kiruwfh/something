@@ -1,20 +1,15 @@
 import { DiagnosticSeverity } from 'vscode';
-import { SafeCheckConfiguration } from '../config/defaultConfig';
-import { SafeSeverity } from '../scanners';
+import type { FindingSeverity } from '../scanners';
 
-export function toDiagnosticSeverity(level: SafeSeverity, config: SafeCheckConfiguration): DiagnosticSeverity {
-  const mapping = config.severity.levels;
-  const value = mapping[level] ?? 'Warning';
-  switch (value.toLowerCase()) {
-    case 'error':
+export function toDiagnosticSeverity(level: FindingSeverity): DiagnosticSeverity {
+  switch (level) {
+    case 'CRITICAL':
+    case 'HIGH':
       return DiagnosticSeverity.Error;
-    case 'warning':
+    case 'MEDIUM':
       return DiagnosticSeverity.Warning;
-    case 'information':
-      return DiagnosticSeverity.Information;
-    case 'hint':
-      return DiagnosticSeverity.Hint;
+    case 'LOW':
     default:
-      return DiagnosticSeverity.Warning;
+      return DiagnosticSeverity.Information;
   }
 }
