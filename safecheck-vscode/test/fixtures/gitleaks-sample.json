@@ -1,0 +1,9 @@
+[
+  {
+    "ruleID": "hardcoded-secret",
+    "description": "Potential secret",
+    "file": "js-demo/server.js",
+    "startLine": 5,
+    "endLine": 5
+  }
+]

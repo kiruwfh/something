@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "packages": [
+        {
+          "package": { "name": "lodash" },
+          "vulnerabilities": [
+            {
+              "summary": "Lodash vulnerability",
+              "database_specific": { "severity": "HIGH", "url": "https://osv.dev/vulnerability/123" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

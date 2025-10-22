@@ -1,0 +1,11 @@
+{
+  "results": [
+    {
+      "test_id": "B602",
+      "issue_text": "subprocess call with shell=True",
+      "issue_severity": "MEDIUM",
+      "filename": "py-demo/app.py",
+      "line_number": 20
+    }
+  ]
+}

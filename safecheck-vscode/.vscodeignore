@@ -1,0 +1,9 @@
+**/.git/**
+**/.github/**
+**/test/**
+**/.vscode/**
+**/.DS_Store
+**/node_modules/**
+**/out/**
+.vscode-test/**
+.safecheck/**

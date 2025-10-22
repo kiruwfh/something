@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "check_id": "python.lang.security.yaml-load",
+      "path": "py-demo/app.py",
+      "start": { "line": 10 },
+      "end": { "line": 10 },
+      "extra": {
+        "message": "yaml.load is unsafe",
+        "severity": "HIGH",
+        "metadata": {
+          "shortlink": "https://semgrep.dev/r/python.lang.security.yaml-load"
+        }
+      }
+    }
+  ]
+}
