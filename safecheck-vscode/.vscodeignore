@@ -1,9 +1,9 @@
-**/.git/**
-**/.github/**
-**/test/**
-**/.vscode/**
-**/.DS_Store
-**/node_modules/**
-**/out/**
+.git/**
+.vscode/**
+node_modules/**
+test/**
+tsconfig.json
+**/*.ts
+!out/**
+**/*.map
 .vscode-test/**
-.safecheck/**

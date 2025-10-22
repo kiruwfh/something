@@ -7,35 +7,31 @@ interface GitleaksIssue {
   file?: string;
   startLine?: number;
   endLine?: number;
-  commit?: string;
 }
 
-export function parseGitleaksJson(stdout: string, workspaceFolder: string): Finding[] {
+export function parseGitleaks(stdout: string, workspaceFolder: string): Finding[] {
   if (!stdout.trim()) {
     return [];
   }
-
   let parsed: GitleaksIssue[];
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(stdout) as GitleaksIssue[];
   } catch (error) {
-    console.error('[SafeCheck] Failed to parse Gitleaks output', error);
+    console.error('[SafeCheck] Failed to parse Gitleaks output:', error);
     return [];
   }
 
   const findings: Finding[] = [];
   for (const issue of parsed) {
-    const filePath = path.relative(workspaceFolder, path.resolve(workspaceFolder, issue.file ?? ''));
+    const file = path.relative(workspaceFolder, path.resolve(workspaceFolder, issue.file ?? ''));
     findings.push({
-      id: `gitleaks-${issue.ruleID}-${filePath}-${issue.startLine ?? 0}`,
+      tool: 'gitleaks',
       ruleId: issue.ruleID ?? 'gitleaks',
       message: issue.description ?? 'Secret detected',
-      severity: 'high',
-      filePath,
-      startLine: issue.startLine ?? 0,
-      endLine: issue.endLine,
-      tool: 'Gitleaks',
-      url: issue.commit ? `https://github.com/search?q=${issue.commit}` : undefined
+      severity: 'HIGH',
+      file,
+      line: issue.startLine ?? 1,
+      endLine: issue.endLine ?? issue.startLine ?? 1
     });
   }
   return findings;

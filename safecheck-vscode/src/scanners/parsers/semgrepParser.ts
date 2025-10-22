@@ -1,69 +1,69 @@
 import * as path from 'path';
-import type { Finding, SafeSeverity } from '../index';
+import type { Finding } from '../index';
 
-interface SemgrepResult {
+interface SemgrepOutput {
   results?: Array<{
     check_id?: string;
     path: string;
-    start: { line: number };
-    end?: { line: number };
+    start?: { line?: number; col?: number };
+    end?: { line?: number };
     extra?: {
       message?: string;
       severity?: string;
       metadata?: {
-        shortlink?: string;
-        references?: string[];
+        cwe?: string | string[];
       };
     };
   }>;
 }
 
-export function parseSemgrepJson(stdout: string, workspaceFolder: string): Finding[] {
+export function parseSemgrep(stdout: string, workspaceFolder: string): Finding[] {
   if (!stdout.trim()) {
     return [];
   }
-
-  let parsed: SemgrepResult;
+  let parsed: SemgrepOutput;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(stdout) as SemgrepOutput;
   } catch (error) {
-    console.error('[SafeCheck] Failed to parse Semgrep output', error);
+    console.error('[SafeCheck] Failed to parse Semgrep output:', error);
     return [];
   }
 
   const findings: Finding[] = [];
   for (const result of parsed.results ?? []) {
     const filePath = path.relative(workspaceFolder, path.resolve(workspaceFolder, result.path));
-    const ruleId = result.check_id ?? 'semgrep';
-    const message = result.extra?.message ?? 'Semgrep issue';
     const severity = normalizeSeverity(result.extra?.severity);
+    const ruleId = result.check_id ?? 'semgrep';
+    const cwe = Array.isArray(result.extra?.metadata?.cwe)
+      ? result.extra?.metadata?.cwe[0]
+      : result.extra?.metadata?.cwe;
     findings.push({
-      id: `semgrep-${ruleId}-${filePath}-${result.start?.line ?? 0}`,
+      tool: 'semgrep',
       ruleId,
-      message,
       severity,
-      filePath,
-      startLine: result.start?.line ?? 0,
-      endLine: result.end?.line,
-      tool: 'Semgrep',
-      url: result.extra?.metadata?.shortlink ?? result.extra?.metadata?.references?.[0]
+      message: result.extra?.message ?? 'Semgrep issue',
+      file: filePath,
+      line: result.start?.line ?? 1,
+      endLine: result.end?.line ?? result.start?.line ?? 1,
+      column: result.start?.col,
+      cwe: cwe || undefined
     });
   }
   return findings;
 }
 
-function normalizeSeverity(value?: string): SafeSeverity {
-  switch ((value ?? '').toLowerCase()) {
-    case 'critical':
-    case 'error':
-      return 'critical';
-    case 'high':
-      return 'high';
-    case 'medium':
-      return 'medium';
-    case 'low':
-      return 'low';
+function normalizeSeverity(value: string | undefined): Finding['severity'] {
+  switch ((value ?? '').toUpperCase()) {
+    case 'CRITICAL':
+    case 'ERROR':
+      return 'CRITICAL';
+    case 'HIGH':
+      return 'HIGH';
+    case 'MEDIUM':
+      return 'MEDIUM';
+    case 'LOW':
+      return 'LOW';
     default:
-      return 'info';
+      return 'MEDIUM';
   }
 }

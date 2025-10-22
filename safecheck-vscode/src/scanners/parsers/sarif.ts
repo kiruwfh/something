@@ -1,6 +1,6 @@
 import type { Finding } from '../index';
 
-export function buildSarifReport(findings: Finding[], toolName = 'SafeCheck', version = '0.1.0'): any {
+export function buildSarif(findings: Finding[], workspaceFolder: string): unknown {
   const results = findings.map((finding) => ({
     ruleId: finding.ruleId,
     message: { text: finding.message },
@@ -9,20 +9,19 @@ export function buildSarifReport(findings: Finding[], toolName = 'SafeCheck', ve
       {
         physicalLocation: {
           artifactLocation: {
-            uri: finding.filePath.replace(/\\/g, '/'),
+            uri: finding.file.replace(/\\/g, '/'),
             uriBaseId: '%SRCROOT%'
           },
           region: {
-            startLine: Math.max(1, finding.startLine),
-            endLine: finding.endLine ?? finding.startLine
+            startLine: Math.max(1, finding.line),
+            endLine: finding.endLine ?? finding.line
           }
         }
       }
     ],
     properties: {
       tool: finding.tool,
-      recommendation: finding.recommendation,
-      url: finding.url
+      cwe: finding.cwe
     }
   }));
 
@@ -33,26 +32,40 @@ export function buildSarifReport(findings: Finding[], toolName = 'SafeCheck', ve
       {
         tool: {
           driver: {
-            name: toolName,
-            version,
+            name: 'SafeCheck',
             informationUri: 'https://github.com/safecheck/safecheck-vscode',
             rules: aggregateRules(findings)
           }
         },
-        results
+        artifacts: [
+          {
+            location: {
+              uri: '.',
+              uriBaseId: '%SRCROOT%'
+            },
+            sourceLanguage: 'multi'
+          }
+        ],
+        results,
+        originalUriBaseIds: {
+          '%SRCROOT%': {
+            uri: workspaceFolder.replace(/\\/g, '/'),
+            description: { text: 'Workspace root' }
+          }
+        }
       }
     ]
   };
 }
 
-function aggregateRules(findings: Finding[]) {
+function aggregateRules(findings: Finding[]): Array<{ id: string; name: string; helpUri?: string }> {
   const seen = new Map<string, { id: string; name: string; helpUri?: string }>();
   for (const finding of findings) {
     if (!seen.has(finding.ruleId)) {
       seen.set(finding.ruleId, {
         id: finding.ruleId,
-        name: finding.message.slice(0, 120),
-        helpUri: finding.url
+        name: finding.message.slice(0, 160),
+        helpUri: undefined
       });
     }
   }
@@ -61,13 +74,12 @@ function aggregateRules(findings: Finding[]) {
 
 function toSarifLevel(severity: Finding['severity']): string {
   switch (severity) {
-    case 'critical':
-    case 'high':
+    case 'CRITICAL':
+    case 'HIGH':
       return 'error';
-    case 'medium':
+    case 'MEDIUM':
       return 'warning';
-    case 'low':
-      return 'note';
+    case 'LOW':
     default:
       return 'note';
   }

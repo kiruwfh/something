@@ -1,38 +1,39 @@
 import * as path from 'path';
+import * as vscode from 'vscode';
 import which from 'which';
-import { window } from 'vscode';
-import type { SafeCheckConfiguration } from '../config/defaultConfig';
-import { loadIgnoreFile, isIgnored, IgnoreConfig } from '../utils/ignore';
-import { runSemgrepScan } from './semgrep';
-import { runBanditScan } from './bandit';
-import { runOsvScan } from './osv';
-import { runGitleaksScan } from './gitleaks';
-import { runTrivyScan } from './trivy';
+import { getDefaultConfiguration, SafeCheckConfiguration } from '../config/defaultConfig';
+import { loadIgnoreConfig, IgnoreConfig, isIgnored } from '../utils/ignore';
+import { runSemgrep } from './semgrep';
+import { runBandit } from './bandit';
+import { runOsvScanner } from './osv';
+import { runGitleaks } from './gitleaks';
+import { runTrivy } from './trivy';
 
-export type SafeSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+export type SupportedTool = 'semgrep' | 'bandit' | 'osv' | 'gitleaks' | 'trivy';
+
+export type FindingSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface Finding {
-  id: string;
+  tool: SupportedTool;
   ruleId: string;
+  severity: FindingSeverity;
   message: string;
-  severity: SafeSeverity;
-  filePath: string;
-  startLine: number;
+  file: string;
+  line: number;
   endLine?: number;
-  tool: string;
-  recommendation?: string;
-  url?: string;
+  column?: number;
+  cwe?: string;
 }
 
 export interface ScannerRunOptions {
   workspaceFolder: string;
-  config: SafeCheckConfiguration;
+  config?: SafeCheckConfiguration;
 }
 
 export interface ScanResult {
   findings: Finding[];
-  missingTools: string[];
   warnings: string[];
+  missingTools: SupportedTool[];
 }
 
 export interface ScannerContext {
@@ -48,89 +49,123 @@ interface ToolExecutionResult {
 }
 
 export async function runAllScans(options: ScannerRunOptions): Promise<ScanResult> {
-  const { workspaceFolder, config } = options;
-  const ignore = loadIgnoreFile(workspaceFolder, config.ignoreFile);
-  const baseContext = { workspaceFolder, config, ignore } as const;
+  const config = options.config ?? getDefaultConfiguration();
+  const ignore = loadIgnoreConfig(options.workspaceFolder);
+  const contexts: Array<Promise<PartialResult>> = [];
 
-  const jobs: Array<Promise<PartialScanResult>> = [];
+  if (config.tools.semgrep.enabled) {
+    contexts.push(runWithAvailability('semgrep', config.paths.semgrep, (executable) =>
+      runSemgrep({ workspaceFolder: options.workspaceFolder, executable, config, ignore })
+    ));
+  }
+  if (config.tools.bandit.enabled) {
+    contexts.push(runWithAvailability('bandit', config.paths.bandit, (executable) =>
+      runBandit({ workspaceFolder: options.workspaceFolder, executable, config, ignore })
+    ));
+  }
+  if (config.tools.osv.enabled) {
+    contexts.push(runWithAvailability('osv', config.paths.osv, (executable) =>
+      runOsvScanner({ workspaceFolder: options.workspaceFolder, executable, config, ignore })
+    ));
+  }
+  if (config.tools.gitleaks.enabled) {
+    contexts.push(runWithAvailability('gitleaks', config.paths.gitleaks, (executable) =>
+      runGitleaks({ workspaceFolder: options.workspaceFolder, executable, config, ignore })
+    ));
+  }
+  if (config.tools.trivy.enabled) {
+    contexts.push(runWithAvailability('trivy', config.paths.trivy, (executable) =>
+      runTrivy({ workspaceFolder: options.workspaceFolder, executable, config, ignore })
+    ));
+  }
 
-  if (config.enableSemgrep) {
-    jobs.push(runWithAvailability('semgrep', config.paths.semgrep, (executable) => runSemgrepScan({ ...baseContext, executable })));
-  }
-  if (config.enableBandit) {
-    jobs.push(runWithAvailability('bandit', config.paths.bandit, (executable) => runBanditScan({ ...baseContext, executable })));
-  }
-  if (config.enableOsv) {
-    jobs.push(runWithAvailability('osv-scanner', config.paths.osv, (executable) => runOsvScan({ ...baseContext, executable })));
-  }
-  if (config.enableGitleaks) {
-    jobs.push(runWithAvailability('gitleaks', config.paths.gitleaks, (executable) => runGitleaksScan({ ...baseContext, executable })));
-  }
-  if (config.enableTrivy) {
-    jobs.push(runWithAvailability('trivy', config.paths.trivy, (executable) => runTrivyScan({ ...baseContext, executable })));
-  }
-
-  const results = await Promise.all(jobs);
+  const results = await Promise.all(contexts);
 
   const findings: Finding[] = [];
-  const missingTools: string[] = [];
   const warnings: string[] = [];
+  const missingTools: SupportedTool[] = [];
 
   for (const result of results) {
     if (result.missing) {
       missingTools.push(result.tool);
+      continue;
     }
     if (result.warning) {
       warnings.push(result.warning);
     }
-    if (result.findings) {
-      findings.push(...result.findings.filter((finding) => shouldIncludeFinding(finding, workspaceFolder, ignore)));
+    if (!result.findings) {
+      continue;
+    }
+    for (const finding of result.findings) {
+      if (!shouldIncludeFinding(finding, options.workspaceFolder, ignore)) {
+        continue;
+      }
+      findings.push(finding);
     }
   }
 
-  if (missingTools.length > 0) {
-    void window.showWarningMessage(`SafeCheck could not find: ${missingTools.join(', ')}. Check your PATH or SafeCheck settings for guidance.`);
-  }
-
-  return { findings, missingTools, warnings };
+  return { findings, warnings, missingTools };
 }
 
-interface PartialScanResult {
-  tool: string;
+interface PartialResult {
+  tool: SupportedTool;
   missing?: boolean;
   warning?: string;
   findings?: Finding[];
 }
 
-async function runWithAvailability(tool: string, overridePath: string | undefined, run: (executable: string) => Promise<ToolExecutionResult>): Promise<PartialScanResult> {
+async function runWithAvailability(
+  tool: SupportedTool,
+  overridePath: string | undefined,
+  executor: (executable: string) => Promise<ToolExecutionResult>
+): Promise<PartialResult> {
   const executable = await resolveExecutable(tool, overridePath);
   if (!executable) {
     return { tool, missing: true };
   }
   try {
-    const result = await run(executable);
+    const result = await executor(executable);
     return { tool, findings: result.findings, warning: result.warning };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[SafeCheck] ${tool} scan failed:`, message);
-    return { tool, warning: message, findings: [] };
+    console.error(`[SafeCheck] ${tool} execution failed: ${message}`);
+    return { tool, findings: [], warning: message };
   }
 }
 
-async function resolveExecutable(tool: string, overridePath?: string): Promise<string | undefined> {
-  if (overridePath) {
-    return overridePath;
+async function resolveExecutable(tool: SupportedTool, override?: string): Promise<string | undefined> {
+  if (override) {
+    return override;
   }
   try {
-    return await which(tool);
+    const resolved = await which(tool === 'osv' ? 'osv-scanner' : tool);
+    return resolved;
   } catch {
     return undefined;
   }
 }
 
 function shouldIncludeFinding(finding: Finding, workspaceFolder: string, ignore: IgnoreConfig): boolean {
-  const absolutePath = path.isAbsolute(finding.filePath)
-    ? finding.filePath
-    : path.join(workspaceFolder, finding.filePath);
-  return !isIgnored(ignore, workspaceFolder, absolutePath, finding.ruleId);
+  const absolute = path.isAbsolute(finding.file)
+    ? finding.file
+    : path.join(workspaceFolder, finding.file);
+  if (isIgnored(ignore, workspaceFolder, absolute, finding.ruleId)) {
+    return false;
+  }
+  return true;
+}
+
+export function showMissingToolMessage(tools: SupportedTool[]): void {
+  if (tools.length === 0) {
+    return;
+  }
+  const instructionsLink = vscode.Uri.parse('https://github.com/safecheck/safecheck-vscode#external-scanners');
+  void vscode.window.showInformationMessage(
+    `SafeCheck could not find ${tools.join(', ')}. Install them and ensure they are on your PATH.`,
+    'Open setup guide'
+  ).then((selection) => {
+    if (selection === 'Open setup guide') {
+      void vscode.env.openExternal(instructionsLink);
+    }
+  });
 }
