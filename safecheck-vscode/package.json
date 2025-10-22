@@ -1,0 +1,85 @@
+{
+  "name": "safecheck-vscode",
+  "displayName": "SafeCheck",
+  "description": "Local-first security scanning companion for VS Code that aggregates Semgrep, Bandit, OSV-Scanner, Gitleaks, and Trivy.",
+  "version": "0.1.0",
+  "publisher": "safecheck",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "Other"],
+  "activationEvents": [
+    "onCommand:safecheck.scanWorkspace",
+    "workspaceContains:**/*"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "safecheck.scanWorkspace", "title": "SafeCheck: Scan Workspace" },
+      { "command": "safecheck.exportSarif", "title": "SafeCheck: Export SARIF Report" },
+      { "command": "safecheck.toggleBaseline", "title": "SafeCheck: Toggle Baseline" },
+      { "command": "safecheck.openPanel", "title": "SafeCheck: Show Findings" }
+    ],
+    "configuration": {
+      "title": "SafeCheck",
+      "properties": {
+        "safecheck.enableSemgrep": { "type": "boolean", "default": true, "description": "Run Semgrep scans when available." },
+        "safecheck.enableBandit": { "type": "boolean", "default": true, "description": "Run Bandit scans when available." },
+        "safecheck.enableOsv": { "type": "boolean", "default": true, "description": "Run OSV-Scanner scans when available." },
+        "safecheck.enableGitleaks": { "type": "boolean", "default": true, "description": "Run Gitleaks scans when available." },
+        "safecheck.enableTrivy": { "type": "boolean", "default": false, "description": "Run Trivy scans when available." },
+        "safecheck.paths.semgrep": { "type": "string", "default": "", "description": "Override path to the Semgrep executable." },
+        "safecheck.paths.bandit": { "type": "string", "default": "", "description": "Override path to the Bandit executable." },
+        "safecheck.paths.osv": { "type": "string", "default": "", "description": "Override path to the OSV-Scanner executable." },
+        "safecheck.paths.gitleaks": { "type": "string", "default": "", "description": "Override path to the Gitleaks executable." },
+        "safecheck.paths.trivy": { "type": "string", "default": "", "description": "Override path to the Trivy executable." },
+        "safecheck.baseline.enabled": { "type": "boolean", "default": true, "description": "Filter out findings that exist in the baseline file." },
+        "safecheck.baseline.path": { "type": "string", "default": ".safecheck/baseline.json", "description": "Relative path to the baseline file." },
+        "safecheck.ignoreFile": { "type": "string", "default": ".safecheckignore", "description": "Relative path to the ignore file." },
+        "safecheck.severity.levels": {
+          "type": "object",
+          "default": {
+            "critical": "Error",
+            "high": "Error",
+            "medium": "Warning",
+            "low": "Information",
+            "info": "Information"
+          },
+          "description": "Mapping of SafeCheck severities to VS Code DiagnosticSeverity values."
+        },
+        "safecheck.llm.enabled": { "type": "boolean", "default": false, "description": "Enable the optional AI-powered fix suggestions." },
+        "safecheck.llm.provider": { "type": "string", "default": "openrouter", "enum": ["openrouter"], "description": "LLM provider identifier." },
+        "safecheck.llm.model": { "type": "string", "default": "openrouter/auto", "description": "Model identifier for the LLM provider." },
+        "safecheck.llm.baseUrl": { "type": "string", "default": "https://openrouter.ai/api/v1", "description": "Base URL for the OpenRouter API." },
+        "safecheck.timeout": { "type": "number", "default": 180000, "description": "Maximum time in milliseconds for each scanner." },
+        "safecheck.report.output": { "type": "string", "default": ".safecheck/reports", "description": "Directory for generated reports." }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "build": "npm run compile",
+    "watch": "tsc -w -p .",
+    "lint": "tsc --noEmit",
+    "test": "mocha -r ts-node/register test/**/*.test.ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.11",
+    "@types/minimatch": "^5.1.2",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.85.0",
+    "@types/which": "^3.0.3",
+    "chai": "^4.3.10",
+    "mocha": "^10.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "minimatch": "^9.0.3",
+    "which": "^4.0.0"
+  }
+}

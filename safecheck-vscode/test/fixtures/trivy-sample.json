@@ -1,0 +1,14 @@
+{
+  "Results": [
+    {
+      "Target": "Dockerfile",
+      "Vulnerabilities": [
+        {
+          "id": "CVE-1234",
+          "title": "Outdated package",
+          "severity": "LOW"
+        }
+      ]
+    }
+  ]
+}
